@@ -1,0 +1,20 @@
+name: AutoPilot Scheduler
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  
+  # Allow manual trigger from GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger AutoPilot Pipeline
+        run: |
+          echo "Triggering AutoPilot email summarization..."
+          curl -X POST https://autopilot-yourname.vercel.app/trigger
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}

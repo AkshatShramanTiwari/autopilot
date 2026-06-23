@@ -1,0 +1,10 @@
+venv/
+Docker.app/
+.env
+*.db
+*.db.bak
+*.log
+**pycache**/
+.DS_Store
+.env.swp
+.env.swo
