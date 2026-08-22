@@ -123,7 +123,7 @@ def pipeline_job(
             imap_port,
         )
         emails = _run_with_retries(
-            lambda: fetcher.fetch_unread_emails(max_emails=10),
+            lambda: fetcher.fetch_unread_emails(max_emails=Config.MAX_EMAILS),
             "Fetch unread emails",
         )
 

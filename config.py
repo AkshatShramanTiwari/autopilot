@@ -26,6 +26,11 @@ class Config:
     SCHEDULE_CRON = os.getenv("SCHEDULE_CRON", "0 9 * * 1")  # Default: Monday 9 AM
     SCHEDULE_ENABLED = os.getenv("SCHEDULE_ENABLED", "true").strip().lower() == "true"
 
+
+    # Email Processing
+    MAX_EMAILS = int(os.getenv("MAX_EMAILS", "5"))
+
+
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FILE = os.getenv("LOG_FILE", "autopilot.log")

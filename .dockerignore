@@ -1,0 +1,12 @@
+venv
+__pycache__
+*.pyc
+.git
+.gitignore
+.env.swp
+.DS_Store
+autopilot.log
+autopilot_history.db
+autopilot_jobs.db
+autopilot_jobs.db.bak
+Docker.app

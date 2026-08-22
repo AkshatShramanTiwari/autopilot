@@ -38,12 +38,15 @@ async def lifespan(app: FastAPI):
         scheduler_instance = AutoPilotScheduler()
 
         if Config.SCHEDULE_ENABLED:
-            scheduler_instance.add_scheduled_job(Config.SCHEDULE_CRON)
             scheduler_instance.start()
+
+            # Only create the default job if no persisted job exists
+            if not scheduler_instance.scheduler.get_job("email_summary_job"):
+                scheduler_instance.add_scheduled_job(Config.SCHEDULE_CRON)
+
             logger.info("Scheduler started")
         else:
             logger.info("Schedule disabled. Scheduler initialized for manual triggers only.")
-
     except Exception as e:
         logger.error(f"Failed to start AutoPilot: {e}")
         sys.exit(1)
@@ -76,7 +79,9 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "GET /health": "Health check",
+            "GET /status": "Detailed scheduler status",
             "GET /jobs": "List scheduled jobs",
+            "POST /schedule/weekly": "Run every week on a specified day",
             "GET /history": "Get summary history (params: ?limit=10)",
             "POST /trigger": "Manually trigger pipeline",
             "POST /schedule": "Update cron schedule (params: ?cron=0 9 * * *)",
@@ -98,6 +103,54 @@ async def health_check():
         "model": Config.OLLAMA_MODEL,
     }
 
+@app.get("/status")
+async def status():
+    """Detailed application status."""
+
+    if not scheduler_instance:
+        return {
+            "application": "AutoPilot",
+            "status": "not_initialized"
+        }
+
+    jobs = scheduler_instance.scheduler.get_jobs()
+
+    next_run = None
+
+    if jobs and jobs[0].next_run_time:
+        next_run = jobs[0].next_run_time.isoformat()
+
+    return {
+        "application": "AutoPilot",
+        "version": "2.0",
+
+        "scheduler": {
+            "running": scheduler_instance.scheduler.running,
+            "enabled": Config.SCHEDULE_ENABLED,
+            "jobs": len(jobs),
+            "next_run": next_run,
+            "cron": str(jobs[0].trigger) if jobs else None,
+        },
+
+        "ollama": {
+            "model": Config.OLLAMA_MODEL,
+            "host": Config.OLLAMA_HOST,
+        },
+
+        "email": {
+            "address": Config.EMAIL_ADDRESS,
+            "max_emails": Config.MAX_EMAILS,
+        },
+
+        "slack": {
+            "configured": bool(Config.SLACK_WEBHOOK_URL),
+        },
+
+        "logging": {
+            "level": Config.LOG_LEVEL,
+            "file": Config.LOG_FILE,
+        }
+    }
 
 @app.post("/trigger")
 async def trigger_pipeline():
@@ -139,9 +192,77 @@ async def update_schedule(cron: str):
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     if scheduler_instance.update_schedule(cron):
-        return {"status": "success", "cron": cron, "message": "Schedule updated"}
-    else:
-        raise HTTPException(status_code=400, detail="Invalid cron expression")
+        return {
+            "status": "success",
+            "cron": cron,
+            "message": "Schedule updated",
+        }
+
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid cron expression",
+    )
+
+
+@app.post("/schedule/daily")
+async def schedule_daily(hour: int, minute: int):
+    """Schedule the pipeline to run every day."""
+
+    if not scheduler_instance:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    cron = f"{minute} {hour} * * *"
+
+    if scheduler_instance.update_schedule(cron):
+        return {
+            "status": "success",
+            "message": f"Pipeline scheduled every day at {hour:02d}:{minute:02d}",
+            "cron": cron,
+        }
+
+    raise HTTPException(
+        status_code=400,
+        detail="Unable to create daily schedule",
+    )
+
+@app.post("/schedule/weekly")
+async def schedule_weekly(day: str, hour: int, minute: int):
+    """Schedule the pipeline to run weekly."""
+
+    if not scheduler_instance:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    days = {
+        "monday": 1,
+        "tuesday": 2,
+        "wednesday": 3,
+        "thursday": 4,
+        "friday": 5,
+        "saturday": 6,
+        "sunday": 0,
+    }
+
+    day = day.lower()
+
+    if day not in days:
+        raise HTTPException(
+            status_code=400,
+            detail="Day must be monday, tuesday, wednesday, thursday, friday, saturday or sunday",
+        )
+
+    cron = f"{minute} {hour} * * {days[day]}"
+
+    if scheduler_instance.update_schedule(cron):
+        return {
+            "status": "success",
+            "message": f"Pipeline scheduled every {day.title()} at {hour:02d}:{minute:02d}",
+            "cron": cron,
+        }
+
+    raise HTTPException(
+        status_code=400,
+        detail="Unable to create weekly schedule",
+    )
 
 
 @app.get("/history")
